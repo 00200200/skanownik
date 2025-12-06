@@ -1,0 +1,7 @@
+{
+    "threshold": 11.377918243408203,
+    "safe_threshold": 11.114185796508789,
+    "patch_size": 224,
+    "stride": 64,
+    "use_coords": false
+}
