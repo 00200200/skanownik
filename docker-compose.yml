@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      network: host
+    network_mode: "host"
+    environment:
+      - CUDA_VISIBLE_DEVICES=
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/trained_models:/app/trained_models
+      - ./backend/trained_models_anomaly:/app/trained_models_anomaly
+
+  frontend:
+    build:
+      context: ./frontend
+      network: host
+    network_mode: "host"
+    depends_on:
+      - backend

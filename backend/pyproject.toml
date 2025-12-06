@@ -5,16 +5,28 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "opencv-python>=4.10.0",
+    "opencv-python-headless>=4.10.0",
     "numpy>=1.26.0",
     "scikit-image>=0.24.0",
     "hydra-core>=1.3.0",
-    "torch>=2.9.1",
-    "pytorch-lightning>=2.6.0",
-    "torchvision>=0.24.1",
+    "torch==2.5.1",
+    "pytorch-lightning==2.4.0",
+    "torchvision==0.20.1",
     "grad-cam>=1.5.5",
     "matplotlib>=3.10.7",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.9",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
 
 [build-system]
 requires = ["hatchling"]
