@@ -46,21 +46,6 @@ class XRayDataset(Dataset):
             img = cv2.imread(str(img_path))
             if img is None:
                 continue
-            
-            # Try to find the corresponding "blue/metal" image and blend
-            # Current path: .../ID czarno.bmp -> Target path: .../ID.bmp
-            path_str = str(img_path)
-            if " czarno.bmp" in path_str:
-                other_path_str = path_str.replace(" czarno.bmp", ".bmp")
-                if os.path.exists(other_path_str):
-                    other_img = cv2.imread(other_path_str)
-                    if other_img is not None:
-                        if img.shape == other_img.shape:
-                            # Blend 90/10
-                            img = cv2.addWeighted(img, 0.9, other_img, 0.1, 0)
-                        else:
-                            print(f"Warning: Shape mismatch for {img_path} vs {other_path_str}")
-
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             
             # Align (Placeholder)
@@ -104,8 +89,17 @@ class XRayDataset(Dataset):
             patch = self.transform(patch)
             
         if self.mode == 'train':
-            # Just return the patch tensor
-            return patch
+            # Return patch and metadata for spatial awareness
+            return {
+                'patch': patch,
+                'x': sample['x'],
+                'y': sample['y'],
+                'img_idx': sample['img_idx'],
+                'img_path': sample['img_path'],
+                'orig_h': sample['orig_h'],
+                'orig_w': sample['orig_w'],
+                'label': sample['label']
+            }
         else:
             # Return patch and metadata for reconstruction
             return {
@@ -157,12 +151,11 @@ class XRayDataModule(LightningDataModule):
             # Filter for 'czarno' if needed
             all_clean_files = [f for f in all_clean_files if "czarno" in f.name]
             
-        # Deterministic split: 90% Train, 10% Validation (Test)
         import random
         random.seed(42)
         random.shuffle(all_clean_files)
         
-        split_idx = int(len(all_clean_files) * 0.9)
+        split_idx = int(len(all_clean_files) * 0.8)
         train_clean_files = all_clean_files[:split_idx]
         val_clean_files = all_clean_files[split_idx:]
         

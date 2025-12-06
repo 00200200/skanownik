@@ -8,24 +8,25 @@ import joblib
 import os
 
 class AnomalyDetectorPL(LightningModule):
-    def __init__(self, backbone_name='resnet18', memory_bank_size=10000):
+    def __init__(self, backbone_name='resnet18', memory_bank_size=10000, use_coords=False, knn_path="trained_models_anomaly/knn_model.pkl"):
         super().__init__()
         self.save_hyperparameters()
+        self.use_coords = use_coords
+        self.knn_path = knn_path
         
         # 1. Backbone
         # Load pre-trained ResNet
         if backbone_name == 'resnet18':
             self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+            self.backbone.fc = nn.Identity()
+        elif backbone_name == 'resnet34':
+            self.backbone = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+            self.backbone.fc = nn.Identity()
         elif backbone_name == 'wide_resnet50_2':
             self.backbone = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.DEFAULT)
+            self.backbone.fc = nn.Identity()
         else:
             raise ValueError(f"Unknown backbone: {backbone_name}")
-            
-        # Remove FC layers (we only need feature extractor)
-        # We will use the output of the average pooling layer (before fc)
-        # Or we can extract intermediate features.
-        # Simplified PatchCore: Use the final embedding after GAP.
-        self.backbone.fc = nn.Identity()
         
         # Freeze weights
         for param in self.backbone.parameters():
@@ -47,11 +48,38 @@ class AnomalyDetectorPL(LightningModule):
         return features
 
     def training_step(self, batch, batch_idx):
-        # Batch is just a tensor of patches [B, C, H, W]
-        features = self(batch) # [B, D]
+        # Batch is now a dict
+        patches = batch['patch']
+        
+        features = self(patches) # [B, D]
+        
+        if self.use_coords:
+            xs = batch['x']
+            ys = batch['y']
+            orig_hs = batch['orig_h']
+            orig_ws = batch['orig_w']
+            
+            # Normalize coordinates
+            # We assume all images are roughly same size or we normalize to [0, 1]
+            # Add a weight factor to coordinates to balance with visual features
+            COORD_WEIGHT = 5.0
+            
+            xs_norm = (xs.float() / orig_ws.float()) * COORD_WEIGHT
+            ys_norm = (ys.float() / orig_hs.float()) * COORD_WEIGHT
+            
+            # Concatenate [B, D] with [B, 1] and [B, 1] -> [B, D+2]
+            features_to_save = torch.cat([
+                features, 
+                xs_norm.unsqueeze(1).to(features.device), 
+                ys_norm.unsqueeze(1).to(features.device)
+            ], dim=1)
+        else:
+            features_to_save = features
         
         # Detach and move to CPU to save memory
-        self.memory_bank.append(features.detach().cpu())
+        if len(self.memory_bank) == 0:
+            print(f"Feature stats: Mean={features.mean()}, Std={features.std()}, Max={features.max()}, Min={features.min()}")
+        self.memory_bank.append(features_to_save.detach().cpu())
         
         return None # No loss to optimize
 
@@ -79,23 +107,43 @@ class AnomalyDetectorPL(LightningModule):
         self.knn.fit(X)
         
         # Save KNN model
-        os.makedirs("trained_models_anomaly", exist_ok=True)
-        joblib.dump(self.knn, "trained_models_anomaly/knn_model.pkl")
-        print("KNN model saved.")
+        os.makedirs(os.path.dirname(self.knn_path), exist_ok=True)
+        joblib.dump(self.knn, self.knn_path)
+        print(f"KNN model saved to {self.knn_path}")
 
     def predict_step(self, batch, batch_idx):
         # Batch is a dict with 'patch', 'x', 'y', etc.
         patches = batch['patch']
         
         features = self(patches) # [B, D]
-        features_np = features.detach().cpu().numpy()
+        
+        if self.use_coords:
+            xs = batch['x']
+            ys = batch['y']
+            orig_hs = batch['orig_h']
+            orig_ws = batch['orig_w']
+            
+            # Normalize coordinates
+            COORD_WEIGHT = 10.0
+            xs_norm = (xs.float() / orig_ws.float()) * COORD_WEIGHT
+            ys_norm = (ys.float() / orig_hs.float()) * COORD_WEIGHT
+            
+            features_to_query = torch.cat([
+                features, 
+                xs_norm.unsqueeze(1).to(features.device), 
+                ys_norm.unsqueeze(1).to(features.device)
+            ], dim=1)
+        else:
+            features_to_query = features
+        
+        features_np = features_to_query.detach().cpu().numpy()
         
         if self.knn is None:
             # Try loading
             try:
-                self.knn = joblib.load("trained_models_anomaly/knn_model.pkl")
+                self.knn = joblib.load(self.knn_path)
             except:
-                raise RuntimeError("KNN model not found. Train the model first.")
+                raise RuntimeError(f"KNN model not found at {self.knn_path}. Train the model first.")
         
         # Query KNN
         distances, _ = self.knn.kneighbors(features_np)

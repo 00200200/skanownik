@@ -8,7 +8,7 @@ def manual_classify():
     
     convertive_dir = base_path / ".convertive"
     truck_dir = base_path / ".truck"
-    
+
     convertive_dir.mkdir(exist_ok=True)
     truck_dir.mkdir(exist_ok=True)
     

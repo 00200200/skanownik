@@ -14,20 +14,27 @@ from sklearn.metrics import roc_auc_score, precision_recall_curve, f1_score, con
 def main():
     print("Script started.", flush=True)
     
+    # Ensure lightning_logs directory exists
+    os.makedirs("lightning_logs", exist_ok=True)
+    
     # Configuration for higher precision
     PATCH_SIZE = 224 # Reverted to 224 for better context
-    STRIDE = 64      # Increased stride for faster processing (still good overlap)
+    STRIDE = 96      # Increased stride for faster processing (still good overlap)
     
     # 1. Setup Data
     data_module = XRayDataModule(
         vehicle_type='dostawcze', 
-        batch_size=32,
+        batch_size=16,
         patch_size=PATCH_SIZE,
         stride=STRIDE
     )
     
     # 2. Setup Model
-    model = AnomalyDetectorPL(backbone_name='resnet18')
+    model = AnomalyDetectorPL(
+        backbone_name='resnet18', 
+        use_coords=False,
+        knn_path="trained_models_anomaly/knn_dostawcze.pkl"
+    )
     
     # 3. Trainer
     trainer = Trainer(
@@ -138,7 +145,7 @@ def main():
             print("\nMetrics cannot be calculated: Only one class present in test set.")
     
     # Visualization Loop (Using Best F1 Threshold)
-    output_dir = "anomaly_results"
+    output_dir = os.path.join("anomaly_results", data_module.vehicle_type)
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"\n--- Generating Visualizations (Threshold: {best_threshold:.4f}) ---")
@@ -167,23 +174,44 @@ def main():
         if img_score > best_threshold:
             # Anomaly Detected
             
-            # Find the single most anomalous patch
-            max_score_idx = np.argmax(scores)
-            max_x, max_y = coords[max_score_idx]
+            # Sort patches by score descending
+            sorted_indices = np.argsort(scores)[::-1]
             
-            # Draw rectangle around the most anomalous patch on the original image
             output_img = orig_img.copy()
             
-            # Calculate center of the 224x224 patch
-            center_x = max_x + PATCH_SIZE // 2
-            center_y = max_y + PATCH_SIZE // 2
+            # Find top 1 anomaly
+            anomalies_found = []
             
-            # Draw a smaller "focus" box (e.g., 100x100) centered on the anomaly
-            box_s = 100
-            half_s = box_s // 2
+            for idx in sorted_indices:
+                if len(anomalies_found) >= 1:
+                    break
+                    
+                curr_score = scores[idx]
+                curr_x, curr_y = coords[idx]
+                
+                # Check distance to already found anomalies to avoid overlapping boxes on the same defect
+                is_distinct = True
+                for (exist_x, exist_y, _) in anomalies_found:
+                    dist = np.sqrt((curr_x - exist_x)**2 + (curr_y - exist_y)**2)
+                    if dist < PATCH_SIZE: # If closer than one patch size, consider it the same anomaly
+                        is_distinct = False
+                        break
+                
+                if is_distinct:
+                    anomalies_found.append((curr_x, curr_y, curr_score))
             
-            cv2.rectangle(output_img, (center_x - half_s, center_y - half_s), (center_x + half_s, center_y + half_s), (0, 0, 255), 5) # Red box
-            cv2.putText(output_img, f"ANOMALY: {scores[max_score_idx]:.2f}", (center_x - half_s, center_y - half_s - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            # Draw rectangles for found anomalies
+            for (ax, ay, ascore) in anomalies_found:
+                # Calculate center of the 224x224 patch
+                center_x = ax + PATCH_SIZE // 2
+                center_y = ay + PATCH_SIZE // 2
+                
+                # Draw a smaller "focus" box (e.g., 100x100) centered on the anomaly
+                box_s = 100
+                half_s = box_s // 2
+                
+                cv2.rectangle(output_img, (center_x - half_s, center_y - half_s), (center_x + half_s, center_y + half_s), (0, 0, 255), 5) # Red box
+                cv2.putText(output_img, f"{ascore:.2f}", (center_x - half_s, center_y - half_s - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
             
             save_path = os.path.join(output_dir, f"DETECTED_{fname}")
             cv2.imwrite(save_path, output_img)
