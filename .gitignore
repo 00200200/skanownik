@@ -1,7 +1,6 @@
 # ours
-*/source /home/licho/Programming/Hackaton-Hacknation-Skanownik/backend/.venv/bin/activate.fish
 
-*/trained_models*
+*.ckpt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
