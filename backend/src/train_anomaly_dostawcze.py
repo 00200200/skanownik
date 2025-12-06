@@ -17,12 +17,15 @@ from src.models.anomaly_detector import AnomalyDetectorPL
 print("Imports starting...", flush=True)
 
 
+import json
+
 def main() -> None:
     """Main training script for anomaly detection (dostawcze)."""
     print("Script started.", flush=True)
 
     # Ensure lightning_logs directory exists
     os.makedirs("lightning_logs", exist_ok=True)
+    os.makedirs("trained_models_anomaly", exist_ok=True)
 
     # Configuration for higher precision
     patch_size = 224  # Reverted to 224 for better context
@@ -150,6 +153,22 @@ def main() -> None:
                 print(f"Recall (Sensitivity) at Safe Threshold: {recall_safe:.4f}")
             else:
                 print("\nNo clean images in test set to determine Safe Threshold.")
+                safe_threshold = best_threshold # Fallback
+
+            # Save threshold to JSON
+            threshold_config = {
+                "threshold": float(best_threshold),
+                "safe_threshold": float(safe_threshold) if 'safe_threshold' in locals() else float(best_threshold),
+                "patch_size": patch_size,
+                "stride": stride,
+                "use_coords": False
+            }
+            
+            config_path = "trained_models_anomaly/config_dostawcze.json"
+            with open(config_path, "w") as f:
+                json.dump(threshold_config, f, indent=4)
+            print(f"\nConfiguration and thresholds saved to {config_path}")
+
         else:
             print("\nMetrics cannot be calculated: Only one class present in test set.")
 
