@@ -11,6 +11,9 @@ function App() {
 	const [error, setError] = useState('');
 	const [useFolder, setUseFolder] = useState(false);
 
+	const exportData = results.map(({ image, ...rest }) => rest);
+    const jsonString = JSON.stringify(exportData, null, 2);
+
 	const onSelect = e => {
 		const list = Array.from(e.target.files || []);
 		setFiles(list);
@@ -58,8 +61,7 @@ function App() {
     const downloadJSON = () => {
         if (!results.length) return;
         // Remove image data to keep JSON small
-        const exportData = results.map(({ image, ...rest }) => rest);
-        const jsonString = JSON.stringify(exportData, null, 2);
+        
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -108,6 +110,7 @@ function App() {
 								className='inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300'>
 								{loading ? 'Analizuję...' : 'Wyślij do analizy'}
 							</button>
+							
                             {results.length > 0 && (
                                 <button
                                     type='button'
@@ -175,6 +178,14 @@ function App() {
 						</div>
 					))}
 				</section>
+
+				{jsonString !== "[]" ? (
+					<section className='p-3 mt-2 bg-slate-100 rounded-lg'>
+						<pre>
+							{jsonString}
+						</pre>
+					</section>
+				) : null}
 			</div>
 		</div>
 	);
