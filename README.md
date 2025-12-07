@@ -24,7 +24,7 @@ The most efficient way to deploy the full stack (Frontend + Backend) without man
 
 ### Accessing the Application
 
-*   **Frontend (Web Interface):** [http://localhost:8080](http://localhost:8080)
+*   **Frontend (Web Interface):** [http://localhost:5173](http://localhost:5173)
     *   Upload X-ray scans here to visualize analysis results.
 *   **Backend API (Documentation):** [http://localhost:8000/docs](http://localhost:8000/docs)
     *   Interactive Swagger UI for testing API endpoints directly.
