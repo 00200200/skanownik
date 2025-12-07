@@ -32,12 +32,16 @@ function App() {
 			try {
 				const res = await fetch(`${API_URL}/analyze`, { method: 'POST', body: formData });
 				const data = await res.json();
+
+				if (data.skipped) continue;
+
 				if (!res.ok || data.error) throw new Error(data.error || 'Błąd analizy');
 				newResults.push({
 					name: file.webkitRelativePath || file.name,
 					vehicle: data.vehicle_type,
 					score: data.anomaly_score,
 					is_anomaly: data.is_anomaly,
+                    anomalies: data.anomalies,
 					image: data.image_base64,
 				});
 			} catch (err) {
@@ -50,6 +54,22 @@ function App() {
 		setResults(newResults);
 		setLoading(false);
 	};
+
+    const downloadJSON = () => {
+        if (!results.length) return;
+        // Remove image data to keep JSON small
+        const exportData = results.map(({ image, ...rest }) => rest);
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'skanownik_results.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
 
 	return (
 		<div className='min-h-screen bg-slate-50 text-slate-900'>
@@ -74,7 +94,7 @@ function App() {
 									ref={fileInputRef}
 									type='file'
 									className='hidden'
-									accept='image/*'
+									accept='.bmp'
 									multiple
 									{...(useFolder ? { directory: '', webkitdirectory: '' } : {})}
 									onChange={onSelect}
@@ -88,8 +108,17 @@ function App() {
 								className='inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300'>
 								{loading ? 'Analizuję...' : 'Wyślij do analizy'}
 							</button>
+                            {results.length > 0 && (
+                                <button
+                                    type='button'
+                                    onClick={downloadJSON}
+                                    className='inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50'>
+                                    Pobierz JSON
+                                </button>
+                            )}
 						</div>
 					</div>
+                    <p className='mt-2 text-xs text-slate-500 text-right'>Obsługiwane pliki: <b>.czarno.bmp</b></p>
 
 					{error && <p className='mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700'>{error}</p>}
 
@@ -115,9 +144,14 @@ function App() {
 									{r.error ? (
 										<p className='text-sm text-red-600'>{r.error}</p>
 									) : (
-										<p className='text-sm text-slate-600'>
-											{r.vehicle?.toUpperCase?.() || '-'} • wynik {r.score?.toFixed?.(4) ?? '-'}
-										</p>
+										<div className='text-sm text-slate-600'>
+											<p>{r.vehicle?.toUpperCase?.() || '-'} • wynik {r.score?.toFixed?.(4) ?? '-'}</p>
+                                            {r.anomalies && r.anomalies.length > 0 && (
+                                                <p className='text-xs text-slate-500 mt-1'>
+                                                    Wykryto {r.anomalies.length} obszar(ów) anomalii
+                                                </p>
+                                            )}
+										</div>
 									)}
 								</div>
 								{!r.error && (

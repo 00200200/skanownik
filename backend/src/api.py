@@ -98,26 +98,31 @@ def detect_anomalies_internal(vehicle_type, image_path):
             all_coords.append((batch_xs[i], batch_ys[i]))
             
     if not all_scores:
-        return 0.0, False, None
+        return 0.0, False, None, []
 
     max_score = np.max(all_scores)
     threshold = config["threshold"]
     
     # 4. Visualize
     orig_img = cv2.imread(str(image_path))
+    if orig_img is None:
+        print(f"Error: Could not read image {image_path}")
+        return 0.0, False, None, []
+
     output_img = orig_img.copy()
     
     is_anomaly = False
     label_text = "CLEAN"
     color = (0, 255, 0) # Green
     
+    anomalies_found = []
+
     if max_score > threshold:
         is_anomaly = True
         label_text = "DETECTED"
         color = (0, 0, 255) # Red
         
         sorted_indices = np.argsort(all_scores)[::-1]
-        anomalies_found = []
         
         for idx in sorted_indices:
             if len(anomalies_found) >= 1:
@@ -150,12 +155,33 @@ def detect_anomalies_internal(vehicle_type, image_path):
             
     cv2.putText(output_img, f"{label_text} ({vehicle_type})", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
     
-    return float(max_score), is_anomaly, output_img
+    anomalies_metadata = []
+    for (ax, ay, ascore) in anomalies_found:
+        anomalies_metadata.append({
+            "x": int(ax),
+            "y": int(ay),
+            "score": float(ascore),
+            "patch_size": config["patch_size"]
+        })
+
+    return float(max_score), is_anomaly, output_img, anomalies_metadata
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Skanownik Backend is running"}
 
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
+    print(f"Received request for file: {file.filename}")
+    
     # Sanitize filename to prevent directory traversal and ensure it's just a filename
     filename = os.path.basename(file.filename)
+
+    # Check if filename ends with 'czarno.bmp' (case insensitive)
+    # This handles "file.czarno.bmp", "file czarno.bmp", etc.
+    if not filename.lower().endswith("czarno.bmp"):
+        return {"skipped": True, "filename": filename}
+
     temp_path = TEMP_DIR / filename
     
     with open(temp_path, "wb") as buffer:
@@ -169,7 +195,7 @@ async def analyze_image(file: UploadFile = File(...)):
         vehicle_type = classify_vehicle(classifier_model, temp_path)
         
         # 2. Detect
-        max_score, is_anomaly, result_img = detect_anomalies_internal(vehicle_type, temp_path)
+        max_score, is_anomaly, result_img, anomalies_metadata = detect_anomalies_internal(vehicle_type, temp_path)
         
         # 3. Encode image
         if result_img is not None:
@@ -183,13 +209,17 @@ async def analyze_image(file: UploadFile = File(...)):
             "vehicle_type": vehicle_type,
             "anomaly_score": max_score,
             "is_anomaly": is_anomaly,
+            "anomalies": anomalies_metadata,
             "image_base64": img_base64
         }
         
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"error": str(e)}
+        return {"error": f"Processing error: {str(e)}"}
     finally:
         if temp_path.exists():
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except:
+                pass
