@@ -2,6 +2,11 @@
 
 An advanced AI-powered system designed for analyzing X-ray scans of vehicle undercarriages. The system automatically classifies vehicle types (passenger vs. delivery vans) and detects potential anomalies (e.g., contraband, structural modifications) using state-of-the-art Computer Vision algorithms.
 
+## Links
+
+- [Showcase video](./showcase.mkv)
+- [Presentation](./skanownik-prezentacja.pdf)
+
 ## 🚀 Quick Start (Docker) - Recommended for Demonstrations
 
 The most efficient way to deploy the full stack (Frontend + Backend) without manual environment configuration.
