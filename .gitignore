@@ -1,5 +1,5 @@
 # ours
-
+node_modules/
 *.ckpt
 *.pkl
 */anomaly_results

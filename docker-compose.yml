@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       network: host
-    network_mode: "host"
+    network_mode: 'host'
     environment:
       - CUDA_VISIBLE_DEVICES=
     volumes:
@@ -15,6 +15,6 @@ services:
     build:
       context: ./frontend
       network: host
-    network_mode: "host"
+    network_mode: 'host'
     depends_on:
       - backend
