@@ -7,7 +7,8 @@ An advanced AI-powered system designed for analyzing X-ray scans of vehicle unde
 The most efficient way to deploy the full stack (Frontend + Backend) without manual environment configuration.
 
 ### Prerequisites
-*   **Downloading model (.cpkt file) from https://drive.google.com/file/d/1FdS9yK-cGAaH_ukQ8JSXYjrDzz8ny7E8/view?usp=sharing and placing it in backend/trained_models" OR running uv run src/train.py from backend directory**
+
+*   **Download the [model .cpkt file](https://drive.google.com/file/d/1FdS9yK-cGAaH_ukQ8JSXYjrDzz8ny7E8/view?usp=sharing) and place it in [backend/trained_models/](./backend/trained_models) OR execute `uv run src/train.py` from the [backend/](./backend/) directory** to generate the model file
 *   **Docker**
 *   **Docker Compose**
 
@@ -29,6 +30,12 @@ The most efficient way to deploy the full stack (Frontend + Backend) without man
 *   **Backend API (Documentation):** [http://localhost:8000/docs](http://localhost:8000/docs)
     *   Interactive Swagger UI for testing API endpoints directly.
 
+### Example file
+
+There is a sample file that can be uploaded to the web UI in the project directory:
+
+- [auto.czarno.bmp](./auto.czarno.bmp)
+
 ---
 
 ## 🐍 Standalone Backend Setup
@@ -36,6 +43,7 @@ The most efficient way to deploy the full stack (Frontend + Backend) without man
 For development purposes or testing the backend in isolation without Docker.
 
 ### Prerequisites
+
 *   Python 3.12+
 *   `uv` (Python package manager)
 
@@ -59,9 +67,11 @@ For development purposes or testing the backend in isolation without Docker.
 ```bash
 uv run uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 ```
+
 The server will be accessible at `http://localhost:8000`.
 
 ### Additional Scripts (Training & Evaluation)
+
 The `backend/` directory contains scripts for model training and evaluation. Please refer to `backend/README.md` for detailed instructions.
 
 ---
