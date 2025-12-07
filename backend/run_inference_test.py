@@ -33,7 +33,7 @@ def main():
     random.seed(42) # For reproducibility
     
     # selected_clean = random.sample(clean_images, min(10, len(clean_images)))
-    selected_dirty = random.sample(dirty_images, min(10, len(dirty_images)))
+    selected_dirty = random.sample(dirty_images, max(10, len(dirty_images)))
     
     all_selected = selected_dirty # selected_clean + selected_dirty
     

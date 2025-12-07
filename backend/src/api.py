@@ -154,7 +154,10 @@ def detect_anomalies_internal(vehicle_type, image_path):
 
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
-    temp_path = TEMP_DIR / file.filename
+    # Sanitize filename to prevent directory traversal and ensure it's just a filename
+    filename = os.path.basename(file.filename)
+    temp_path = TEMP_DIR / filename
+    
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
