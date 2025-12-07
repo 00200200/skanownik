@@ -3,5 +3,5 @@
     "safe_threshold": 11.95159576965332,
     "patch_size": 224,
     "stride": 64,
-    "use_coords": false
+    "use_coords": true
 }

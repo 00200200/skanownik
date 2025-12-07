@@ -161,7 +161,7 @@ def main() -> None:
                 "safe_threshold": float(safe_threshold) if 'safe_threshold' in locals() else float(best_threshold),
                 "patch_size": patch_size,
                 "stride": stride,
-                "use_coords": False
+                "use_coords": True
             }
             
             config_path = "trained_models_anomaly/config_dostawcze.json"
