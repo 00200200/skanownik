@@ -24,13 +24,14 @@ def align_to_reference(
 
 
 def is_background(
-    patch: np.ndarray, threshold: float = 240, ratio: float = 0.9
+    patch: np.ndarray, threshold_white: float = 230, threshold_black: float = 40, ratio: float = 0.60
 ) -> bool:
-    """Check if the patch is mostly background (white).
+    """Check if the patch is mostly background (white or black).
 
     Args:
         patch: Image patch (H, W, C) or (H, W)
-        threshold: Pixel value threshold to consider as 'white' (0-255).
+        threshold_white: Pixel value threshold to consider as 'white' (0-255).
+        threshold_black: Pixel value threshold to consider as 'black' (0-255).
         ratio: Fraction of pixels that must be > threshold to be considered background.
 
     Returns:
@@ -41,11 +42,19 @@ def is_background(
     else:
         gray = patch
 
-    # Count pixels above threshold (assuming white background)
-    white_pixels = np.sum(gray > threshold)
     total_pixels = gray.size
 
-    return (white_pixels / total_pixels) > ratio
+    # 1. Check for White Background (e.g. overexposed or white padding)
+    white_pixels = np.sum(gray > threshold_white)
+    if (white_pixels / total_pixels) > ratio:
+        return True
+
+    # 2. Check for Black Background (e.g. empty X-ray space)
+    black_pixels = np.sum(gray < threshold_black)
+    if (black_pixels / total_pixels) > ratio:
+        return True
+
+    return False
 
 
 def tile_image(

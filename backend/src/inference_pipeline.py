@@ -36,11 +36,11 @@ def load_anomaly_config(vehicle_type):
     config["knn_path"] = f"trained_models_anomaly/knn_{vehicle_type}.pkl"
     
     # Prefer safe_threshold if available, else threshold
-    if "safe_threshold" in config:
-        print(f"Using Safe Threshold: {config['safe_threshold']}")
-        config["threshold"] = config["safe_threshold"]
+    if "threshold" in config:
+        print(f"Using Threshold: {config['threshold']}")
+        config["threshold"] = config["threshold"]
     else:
-        print(f"Using Standard Threshold: {config['threshold']}")
+        print(f"Using Safe Threshold: {config['safe_threshold']}")
         
     return config
 
@@ -140,7 +140,9 @@ def detect_anomalies(vehicle_type, image_path, output_dir):
         batch['patch'] = batch['patch'].to(device)
         batch['x'] = batch['x'].to(device)
         batch['y'] = batch['y'].to(device)
-        # img_idx, img_path, label, orig_h, orig_w might not need to be on GPU or are not tensors
+        batch['orig_h'] = batch['orig_h'].to(device)
+        batch['orig_w'] = batch['orig_w'].to(device)
+        # img_idx, img_path, label might not need to be on GPU or are not tensors
         # But AnomalyDetectorPL.predict_step expects them in the dict
         
         with torch.no_grad():
@@ -182,14 +184,24 @@ def detect_anomalies(vehicle_type, image_path, output_dir):
         # Draw boxes
         sorted_indices = np.argsort(all_scores)[::-1]
         anomalies_found = []
+        max_anomalies = 3
         
         for idx in sorted_indices:
-            if len(anomalies_found) >= 1: # Show top 1
+            if len(anomalies_found) >= max_anomalies:
                 break
                 
             curr_score = all_scores[idx]
             if curr_score < threshold:
                 continue
+
+            # Filter out weak anomalies compared to the strongest one found
+            if len(anomalies_found) > 0:
+                best_score = anomalies_found[0][2]
+                # Secondary anomalies must be:
+                # 1. Very close to the best score (delta < 1.0) - stricter
+                # 2. Absolutely strong (score > 13.0)
+                if curr_score < (best_score - 1.0) or curr_score < 13.0:
+                    continue
                 
             curr_x, curr_y = all_coords[idx]
             
@@ -197,7 +209,7 @@ def detect_anomalies(vehicle_type, image_path, output_dir):
             is_distinct = True
             for (ex, ey, _) in anomalies_found:
                 dist = np.sqrt((curr_x - ex)**2 + (curr_y - ey)**2)
-                if dist < config["patch_size"]:
+                if dist < config["patch_size"] / 3: # Allow significant overlap
                     is_distinct = False
                     break
             

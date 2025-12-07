@@ -39,7 +39,7 @@ def main() -> None:
     # 2. Setup Model
     model = AnomalyDetectorPL(
         backbone_name="resnet18",
-        use_coords=False,
+        use_coords=True,
         knn_path="trained_models_anomaly/knn_dostawcze.pkl",
     )
 
@@ -207,15 +207,29 @@ def main() -> None:
 
             output_img = orig_img.copy()
 
-            # Find top 1 anomaly
+            # Find top anomalies (Adaptive Quantity)
             anomalies_found: list[tuple[int, int, float]] = []
+            max_anomalies = 3  # Safety limit to avoid clutter
 
             for idx in sorted_indices:
-                if len(anomalies_found) >= 1:
+                if len(anomalies_found) >= max_anomalies:
                     break
 
                 curr_score = scores[idx]
                 curr_x, curr_y = coords[idx]
+
+                # Only show patches that actually contribute to the anomaly decision
+                if curr_score <= best_threshold:
+                    continue
+
+                # Filter out weak anomalies compared to the strongest one found
+                if len(anomalies_found) > 0:
+                    best_score = anomalies_found[0][2]
+                    # Secondary anomalies must be:
+                    # 1. Very close to the best score (delta < 1.0) - stricter
+                    # 2. Absolutely strong (score > 13.0)
+                    if curr_score < (best_score - 1.0) or curr_score < 13.0:
+                        continue
 
                 # Check distance to already found anomalies to avoid overlapping boxes
                 # on the same defect
@@ -223,8 +237,8 @@ def main() -> None:
                 for exist_x, exist_y, _ in anomalies_found:
                     dist = np.sqrt((curr_x - exist_x) ** 2 + (curr_y - exist_y) ** 2)
                     if (
-                        dist < patch_size
-                    ):  # If closer than one patch size, consider it the same anomaly
+                        dist < patch_size / 3
+                    ):  # Allow significant overlap (1/3 patch size)
                         is_distinct = False
                         break
 

@@ -16,6 +16,7 @@ class XRayDataset(Dataset):
         patch_size: int = 224,
         stride: int = 112,
         mode: str = "train",
+        vehicle_type: str = "osobowe",
     ):
         """Args:
         image_paths: List of paths to images.
@@ -23,12 +24,14 @@ class XRayDataset(Dataset):
         patch_size: Size of patches.
         stride: Stride for tiling.
         mode: 'train' (returns flattened patches) or 'predict' (returns patches grouped by image info).
+        vehicle_type: 'osobowe' or 'dostawcze'.
         """
         self.image_paths = image_paths
         self.transform = transform
         self.patch_size = patch_size
         self.stride = stride
         self.mode = mode
+        self.vehicle_type = vehicle_type
 
         self.samples = []
         self._prepare_data()
@@ -49,33 +52,59 @@ class XRayDataset(Dataset):
             # Align (Placeholder)
             img = align_to_reference(img)
 
-            # Tile
-            # For training, we filter background aggressively.
-            # For testing, we might want to keep everything or filter less?
-            # Let's stick to filtering to avoid false positives on background noise.
-            patches_with_coords = tile_image(
-                img,
-                patch_size=self.patch_size,
-                stride=self.stride,
-                filter_background=True,
-            )
+            # Augmentation: Horizontal Flip (Mirror)
+            # We add the flipped version to the dataset as well if in training mode
+            images_to_process = [img]
+            if self.mode == "train":
+                # 1. Horizontal Flip
+                img_flipped = cv2.flip(img, 1)
+                images_to_process.append(img_flipped)
+                
+                # 2. Small Rotation
+                # We add more rotations to make the model robust to these movable parts.
+                h, w = img.shape[:2]
+                center = (w // 2, h // 2)
+                
+                if self.vehicle_type == "dostawcze":
+                    # Dostawcze are longer, so large rotations might cut off parts or introduce too much artifact
+                    angles = [1.5, -1.5, 3, -3, 5, -5]
+                else:
+                    # Osobowe can handle slightly more rotation
+                    angles = [3, -3, 5, -5, 7, -7]
+                
+                for angle in angles:
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    img_rot = cv2.warpAffine(img, M, (w, h), borderMode=cv2.BORDER_REPLICATE)
+                    images_to_process.append(img_rot)
 
-            for patch, x, y in patches_with_coords:
-                # Determine label from path
-                label = 1 if "brudne" in str(img_path) else 0
-
-                self.samples.append(
-                    {
-                        "patch": patch,
-                        "x": x,
-                        "y": y,
-                        "img_idx": img_idx,
-                        "img_path": str(img_path),
-                        "orig_h": img.shape[0],
-                        "orig_w": img.shape[1],
-                        "label": label,
-                    }
+            for current_img in images_to_process:
+                # Tile
+                # For training, we filter background aggressively.
+                # For testing, we might want to keep everything or filter less?
+                # Let's stick to filtering to avoid false positives on background noise.
+                patches_with_coords = tile_image(
+                    current_img,
+                    patch_size=self.patch_size,
+                    stride=self.stride,
+                    filter_background=True,
                 )
+
+                for patch, x, y in patches_with_coords:
+                    # Determine label from path
+                    label = 1 if "brudne" in str(img_path) else 0
+
+                    self.samples.append(
+                        {
+                            "patch": patch,
+                            "x": x,
+                            "y": y,
+                            "img_idx": img_idx,
+                            "img_path": str(img_path),
+                            "orig_h": current_img.shape[0],
+                            "orig_w": current_img.shape[1],
+                            "label": label,
+                        }
+                    )
         print(f"Total patches generated: {len(self.samples)}")
 
     def __len__(self):
@@ -136,6 +165,8 @@ class XRayDataModule(LightningDataModule):
             [
                 transforms.ToPILImage(),
                 transforms.Resize((self.patch_size, self.patch_size)),  # Ensure size
+                # Add ColorJitter for brightness/contrast robustness
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize(
                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -161,7 +192,7 @@ class XRayDataModule(LightningDataModule):
         random.seed(42)
         random.shuffle(all_clean_files)
 
-        split_idx = int(len(all_clean_files) * 0.8)
+        split_idx = int(len(all_clean_files) * 0.9)
         train_clean_files = all_clean_files[:split_idx]
         val_clean_files = all_clean_files[split_idx:]
 

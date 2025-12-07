@@ -100,9 +100,9 @@ class AnomalyDetectorPL(LightningModule):
             orig_ws = batch["orig_w"]
 
             # Normalize coordinates
-            # We assume all images are roughly same size or we normalize to [0, 1]
-            # Add a weight factor to coordinates to balance with visual features
-            coord_weight = 5.0
+            # Increasing weight to 15.0 to force extremely strict spatial matching.
+            # The engine MUST be compared only with other engines in the exact same spot.
+            coord_weight = 15.0
 
             xs_norm = (xs.float() / orig_ws.float()) * coord_weight
             ys_norm = (ys.float() / orig_hs.float()) * coord_weight
@@ -150,6 +150,8 @@ class AnomalyDetectorPL(LightningModule):
         x_np = full_bank.numpy()
 
         print("Fitting KNN model...")
+        # Reverting to n_neighbors=1 as increasing K caused "averaging out" of distinct features,
+        # leading to worse discrimination between sharp anomalies and complex background.
         self.knn = NearestNeighbors(n_neighbors=1, metric="euclidean")
         self.knn.fit(x_np)
 
@@ -180,7 +182,7 @@ class AnomalyDetectorPL(LightningModule):
             orig_ws = batch["orig_w"]
 
             # Normalize coordinates
-            coord_weight = 10.0
+            coord_weight = 15.0
             xs_norm = (xs.float() / orig_ws.float()) * coord_weight
             ys_norm = (ys.float() / orig_hs.float()) * coord_weight
 
@@ -209,7 +211,7 @@ class AnomalyDetectorPL(LightningModule):
         # Query KNN
         distances, _ = self.knn.kneighbors(features_np)
 
-        # Anomaly score is the distance to the nearest clean patch
+        # Anomaly score is the distance to the nearest clean patch (back to basics)
         scores = distances[:, 0]  # [B]
 
         return {
