@@ -7,6 +7,7 @@ An advanced AI-powered system designed for analyzing X-ray scans of vehicle unde
 The most efficient way to deploy the full stack (Frontend + Backend) without manual environment configuration.
 
 ### Prerequisites
+*   **Downloading model (.cpkt file) from https://drive.google.com/file/d/1FdS9yK-cGAaH_ukQ8JSXYjrDzz8ny7E8/view?usp=sharing and placing it in backend/trained_models" OR running uv run src/train.py from backend directory**
 *   **Docker**
 *   **Docker Compose**
 
