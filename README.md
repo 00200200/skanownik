@@ -1,19 +1,22 @@
-# Skanownik - Vehicle Undercarriage Anomaly Detection System
+# Skanownik - Vehicle Undercarriage Scan Analysis
 
-An advanced AI-powered system designed for analyzing X-ray scans of vehicle undercarriages. The system automatically classifies vehicle types (passenger vs. delivery vans) and detects potential anomalies (e.g., contraband, structural modifications) using state-of-the-art Computer Vision algorithms.
+A prototype for analyzing X-ray scans of vehicle undercarriages. A ResNet18 classifier predicts one of two vehicle classes: passenger car (`osobowe`) or delivery van (`dostawcze`). A separate pipeline compares image patches with a reference memory bank and flags patches whose feature distance exceeds a configured threshold.
+
+An anomaly score indicates a difference from reference patches; it does not identify contraband, explain a structural modification, or give a calibrated probability of a threat. The API currently highlights at most one patch per image. This is a demonstration project; operational screening would require separate validation on representative scans.
 
 ## Links
 
 - [Showcase video](./showcase.mkv)
 - [Presentation](./skanownik-prezentacja.pdf)
 
-## 🚀 Quick Start (Docker) - Recommended for Demonstrations
+## Quick Start (Docker)
 
-The most efficient way to deploy the full stack (Frontend + Backend) without manual environment configuration.
+Docker Compose runs the frontend and backend for local demonstrations. The configuration uses host networking and a Vite development server.
 
 ### Prerequisites
 
-*   **Download the [model .cpkt file](https://drive.google.com/file/d/1FdS9yK-cGAaH_ukQ8JSXYjrDzz8ny7E8/view?usp=sharing) and place it in [backend/trained_models/](./backend/trained_models) OR execute `uv run src/train.py` from the [backend/](./backend/) directory** to generate the model file
+*   **Download the [vehicle classifier .ckpt file](https://drive.google.com/file/d/1FdS9yK-cGAaH_ukQ8JSXYjrDzz8ny7E8/view?usp=sharing)** and place it at `backend/trained_models/vehicle-classifier-epoch=19-val_loss=0.19.ckpt`, the path currently used by the API. Alternatively, run `uv run src/train.py` from [backend/](./backend/) with training data in `backend/data/` (not included). Training may produce a different checkpoint filename; the API path must match it.
+*   Keep the two `knn_*.pkl` files and their `config_*.json` files in `backend/trained_models_anomaly/`; the classifier checkpoint alone is not sufficient for anomaly inference.
 *   **Docker**
 *   **Docker Compose**
 
@@ -24,7 +27,7 @@ The most efficient way to deploy the full stack (Frontend + Backend) without man
     ```bash
     docker compose up --build
     ```
-    > **⚠️ Important Note:** The initial setup process may take a significant amount of time (several minutes) as it requires downloading base images and installing all system dependencies. Please be patient.
+    > The first build downloads base images and dependencies. Runtime model initialization may also download pretrained ResNet18 weights if they are not cached.
 
 3.  Wait for the containers to build and start successfully.
 
@@ -41,16 +44,19 @@ There is a sample file that can be uploaded to the web UI in the project directo
 
 - [auto.czarno.bmp](./auto.czarno.bmp)
 
+The `/analyze` endpoint processes only filenames ending in `czarno.bmp` (case-insensitive); other names are returned as skipped.
+
 ---
 
-## 🐍 Standalone Backend Setup
+## Standalone Backend Setup
 
 For development purposes or testing the backend in isolation without Docker.
 
 ### Prerequisites
 
-*   Python 3.12+
+*   Python 3.12 (`backend/pyproject.toml` requires `>=3.12,<3.13`)
 *   `uv` (Python package manager)
+*   The classifier checkpoint and anomaly files described above
 
 ### Installation
 
@@ -67,6 +73,8 @@ For development purposes or testing the backend in isolation without Docker.
     uv sync
     ```
 
+The anomaly code also imports `scikit-learn` and `joblib`, which are not declared in `backend/pyproject.toml`. They must be available in the runtime environment; the current dependency list alone does not specify the full inference environment.
+
 ### Running the API
 
 ```bash
@@ -79,12 +87,14 @@ The server will be accessible at `http://localhost:8000`.
 
 The `backend/` directory contains scripts for model training and evaluation. Please refer to `backend/README.md` for detailed instructions.
 
+The anomaly scripts build the memory bank from 90% of clean images, then choose thresholds and calculate metrics on the remaining clean images plus the anomalous images. Because threshold selection and scoring share that set, the resulting F1 is a tuning result. Assessing performance on new scans requires a separate test set with the thresholds fixed in advance.
+
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
-*   **Frontend:** Minimalist web interface (HTML/JS) served via Nginx.
-*   **Backend:** High-performance REST API built with FastAPI (Python).
+*   **Frontend:** React interface served by Vite in the current Docker configuration.
+*   **Backend:** REST API built with FastAPI (Python).
 *   **AI/ML Core:**
     *   **Vehicle Classifier:** ResNet18-based model for distinguishing between passenger cars and delivery vans.
-    *   **Anomaly Detector:** Feature extraction pipeline (ResNet18) combined with a Memory Bank (KNN) approach to identify deviations from the norm.
+    *   **Anomaly Scoring:** Frozen pretrained ResNet18 features and nearest-neighbor distances to a memory bank of reference patches, with a threshold selected for each vehicle class.
